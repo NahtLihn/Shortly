@@ -1,0 +1,296 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Shortly — Simple URL Shortener &amp; Tracker</title>
+    <style>
+      :root {
+        color-scheme: light dark;
+        font-family: 'Segoe UI', Tahoma, sans-serif;
+        background-color: #f7f7fb;
+        color: #222;
+      }
+
+      body {
+        margin: 0;
+        padding: 2rem;
+        display: flex;
+        flex-direction: column;
+        gap: 2rem;
+        align-items: center;
+      }
+
+      header {
+        text-align: center;
+      }
+
+      h1 {
+        margin: 0 0 0.5rem;
+        font-size: 2.4rem;
+      }
+
+      p.lead {
+        margin: 0;
+        font-size: 1.1rem;
+        color: #555;
+      }
+
+      main {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+        gap: 1.5rem;
+        width: min(960px, 100%);
+      }
+
+      .card {
+        background: #fff;
+        border-radius: 16px;
+        box-shadow: 0 10px 30px rgba(31, 41, 55, 0.1);
+        padding: 1.75rem;
+        display: flex;
+        flex-direction: column;
+        gap: 1rem;
+      }
+
+      .card h2 {
+        margin: 0;
+        font-size: 1.5rem;
+      }
+
+      label {
+        font-weight: 600;
+        font-size: 0.95rem;
+      }
+
+      input[type='text'] {
+        width: 100%;
+        padding: 0.65rem 0.75rem;
+        border: 1px solid #d1d5db;
+        border-radius: 10px;
+        font-size: 1rem;
+      }
+
+      button {
+        align-self: flex-start;
+        padding: 0.6rem 1.1rem;
+        border-radius: 10px;
+        border: none;
+        background: #6366f1;
+        color: #fff;
+        font-weight: 600;
+        cursor: pointer;
+        transition: transform 0.2s ease, background 0.2s ease;
+      }
+
+      button:hover {
+        transform: translateY(-1px);
+        background: #4f46e5;
+      }
+
+      .result {
+        padding: 0.75rem 1rem;
+        border-radius: 10px;
+        background: #eef2ff;
+        border: 1px solid #c7d2fe;
+        font-family: ui-monospace, SFMono-Regular, SFMono-Regular, Consolas, 'Liberation Mono', Menlo, monospace;
+        word-break: break-all;
+      }
+
+      .error {
+        color: #dc2626;
+        font-size: 0.95rem;
+        font-weight: 600;
+      }
+
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        border-radius: 12px;
+        overflow: hidden;
+        font-size: 0.95rem;
+      }
+
+      th,
+      td {
+        padding: 0.6rem 0.75rem;
+        text-align: left;
+        border-bottom: 1px solid #e5e7eb;
+      }
+
+      th {
+        background: #f3f4f6;
+        font-weight: 700;
+      }
+
+      tbody tr:last-child td {
+        border-bottom: none;
+      }
+
+      @media (max-width: 640px) {
+        body {
+          padding: 1.5rem 1rem;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <header>
+      <h1>Shortly — Simple URL Shortener &amp; Tracker</h1>
+      <p class="lead">Create compact links and keep track of their performance in seconds.</p>
+    </header>
+    <main>
+      <section class="card" id="shorten-card">
+        <h2>Create a short link</h2>
+        <label for="longUrl">Long URL</label>
+        <input id="longUrl" type="text" placeholder="https://example.com/article" autocomplete="off" />
+        <button id="shortenBtn">Shorten URL</button>
+        <div id="shortenError" class="error" hidden></div>
+        <div id="shortenResult" class="result" hidden></div>
+      </section>
+      <section class="card" id="stats-card">
+        <h2>Check link stats</h2>
+        <label for="code">Short code</label>
+        <input id="code" type="text" placeholder="Enter code" autocomplete="off" />
+        <button id="statsBtn">Fetch stats</button>
+        <div id="statsError" class="error" hidden></div>
+        <div id="statsResult" hidden>
+          <div class="result" id="statsSummary"></div>
+          <h3>Last 7 days</h3>
+          <table>
+            <thead>
+              <tr>
+                <th>Date (UTC)</th>
+                <th>Clicks</th>
+              </tr>
+            </thead>
+            <tbody id="statsDays"></tbody>
+          </table>
+          <h3>Top referrers</h3>
+          <table>
+            <thead>
+              <tr>
+                <th>Host</th>
+                <th>Clicks</th>
+              </tr>
+            </thead>
+            <tbody id="statsReferrers"></tbody>
+          </table>
+        </div>
+      </section>
+    </main>
+    <script>
+      const shortenBtn = document.getElementById('shortenBtn');
+      const shortenInput = document.getElementById('longUrl');
+      const shortenError = document.getElementById('shortenError');
+      const shortenResult = document.getElementById('shortenResult');
+
+      const statsBtn = document.getElementById('statsBtn');
+      const statsInput = document.getElementById('code');
+      const statsError = document.getElementById('statsError');
+      const statsResult = document.getElementById('statsResult');
+      const statsSummary = document.getElementById('statsSummary');
+      const statsDays = document.getElementById('statsDays');
+      const statsReferrers = document.getElementById('statsReferrers');
+
+      function resetShortenCard() {
+        shortenError.hidden = true;
+        shortenResult.hidden = true;
+      }
+
+      function resetStatsCard() {
+        statsError.hidden = true;
+        statsResult.hidden = true;
+      }
+
+      shortenBtn.addEventListener('click', async () => {
+        resetShortenCard();
+        const longUrl = shortenInput.value.trim();
+        if (!longUrl) {
+          shortenError.textContent = 'Please enter a URL to shorten.';
+          shortenError.hidden = false;
+          return;
+        }
+        shortenBtn.disabled = true;
+        try {
+          const response = await fetch('/api/shorten', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ longUrl })
+          });
+          const data = await response.json();
+          if (!data.ok) {
+            throw new Error(data.error || 'Failed to shorten link');
+          }
+          shortenResult.textContent = `${data.short} (code: ${data.code})`;
+          shortenResult.hidden = false;
+        } catch (err) {
+          shortenError.textContent = err.message;
+          shortenError.hidden = false;
+        } finally {
+          shortenBtn.disabled = false;
+        }
+      });
+
+      statsBtn.addEventListener('click', async () => {
+        resetStatsCard();
+        const code = statsInput.value.trim();
+        if (!code) {
+          statsError.textContent = 'Enter a short code to view stats.';
+          statsError.hidden = false;
+          return;
+        }
+        statsBtn.disabled = true;
+        try {
+          const response = await fetch(`/api/stats/${encodeURIComponent(code)}`);
+          const data = await response.json();
+          if (!data.ok) {
+            throw new Error(data.error || 'Failed to fetch stats');
+          }
+          statsSummary.textContent = `Original URL: ${data.longUrl}\nCreated: ${new Date(
+            data.createdAt
+          ).toLocaleString()}\nTotal clicks: ${data.totalClicks}\nUnique visitors: ${data.uniqueVisitors}`;
+          statsSummary.hidden = false;
+
+          statsDays.innerHTML = '';
+          data.last7Days.forEach((item) => {
+            const row = document.createElement('tr');
+            const dateCell = document.createElement('td');
+            dateCell.textContent = item.date;
+            const clickCell = document.createElement('td');
+            clickCell.textContent = item.clicks;
+            row.append(dateCell, clickCell);
+            statsDays.append(row);
+          });
+
+          statsReferrers.innerHTML = '';
+          if (data.topReferrers.length === 0) {
+            const emptyRow = document.createElement('tr');
+            const cell = document.createElement('td');
+            cell.colSpan = 2;
+            cell.textContent = 'No referrers tracked yet.';
+            emptyRow.append(cell);
+            statsReferrers.append(emptyRow);
+          } else {
+            data.topReferrers.forEach((ref) => {
+              const row = document.createElement('tr');
+              const hostCell = document.createElement('td');
+              hostCell.textContent = ref.host;
+              const clicksCell = document.createElement('td');
+              clicksCell.textContent = ref.clicks;
+              row.append(hostCell, clicksCell);
+              statsReferrers.append(row);
+            });
+          }
+
+          statsResult.hidden = false;
+        } catch (err) {
+          statsError.textContent = err.message;
+          statsError.hidden = false;
+        } finally {
+          statsBtn.disabled = false;
+        }
+      });
+    </script>
+  </body>
+</html>
